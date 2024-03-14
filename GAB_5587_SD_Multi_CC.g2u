@@ -1,0 +1,179 @@
+Program.Sub.ScreenSU.Start
+Gui.Form..Create
+Gui.Form..Size(15885,6870)
+Gui.Form..MinX(0)
+Gui.Form..MinY(0)
+Gui.Form..Position(0,0)
+Gui.Form..BackColor(-2147483633)
+Gui.Form..MousePointer(0)
+Gui.Form..Moveable(False)
+Gui.Form..Sizeable(False)
+Gui.Form..Event(UnLoad,Form_UnLoad)
+Gui.Form..Caption("GAB 5587 SD Multi CC")
+Gui.Form.GsGridControl1.Create(GsGridControl)
+Gui.Form.GsGridControl1.Size(15195,5955)
+Gui.Form.GsGridControl1.Position(225,90)
+Gui.Form.GsGridControl1.Event(RowCellClick,GsGridControl1_RowCellClick)
+Program.Sub.ScreenSU.End
+
+'Project #5587
+
+'Needs to be binded to Hook#: 14090
+'ID for script 3 button is 000253
+Program.Sub.Preflight.Start
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+'Variables
+V.Local.sPDSN.Declare(string)
+V.Global.sRet.Declare(string)
+V.Local.bRet.Declare(string)
+V.Global.sPartCode.Declare(string)
+V.Local.sLoc.Declare(string)
+V.Local.sPL.Declare(string)
+V.Local.sUM.Declare(string)
+V.Local.sBIN.Declare(string)
+V.Local.sDLU.Declare(string)
+V.Local.fNet.Declare(float)
+V.Local.fTemp.Declare(float)
+V.Local.fOnHand.Declare(float)
+V.Local.fOnOrderPO.Declare(float)
+V.Local.fOnOrderWO.Declare(float)
+V.Local.fRequired.Declare(float)
+V.Local.sCode.Declare(string)
+V.Local.sCodes.Declare(string)
+V.Local.sQuery.Declare(string)
+V.Local.bTableExisted.Declare(boolean)
+V.Local.iC.Declare(long)
+
+'Retrieve passed part code
+V.Global.sPartCode.set(V.Passed.000003)
+
+'Create Datatable
+F.Data.DataTable.Create("DT", true)
+F.Data.DataTable.AddColumn("DT", "Company Code", "string")
+F.Data.DataTable.AddColumn("DT", "Loc", "string")
+F.Data.DataTable.AddColumn("DT", "Quantity On Hand", "float")
+F.Data.DataTable.AddColumn("DT", "Quantity On Order PO", "float")
+F.Data.DataTable.AddColumn("DT", "Quantity On Order WO", "float")
+F.Data.DataTable.AddColumn("DT", "Quantity Required", "float")
+F.Data.DataTable.AddColumn("DT", "Net", "float")
+F.Data.DataTable.AddColumn("DT", "PL", "string")
+F.Data.DataTable.AddColumn("DT", "Inv UM", "string")
+F.Data.DataTable.AddColumn("DT", "Bin", "string")
+F.Data.DataTable.AddColumn("DT", "Date Last Used", "string")
+
+'Create Table if it does not exist
+F.ODBC.Connection!con.OpenConnection(V.Ambient.PDSN, V.Ambient.PUser, V.Ambient.PPass)
+'F.Intrinsic.UI.MsgBox(V.Local.bTableExisted)
+'F.ODBC.Connection!con.Execute("CREATE TABLE GAB_5587_COMPANIES (CO_CODE CHAR(3))")
+F.ODBC.Connection!con.TableExists("GAB_5587_COMPANIES", V.Local.bTableExisted)
+F.Intrinsic.Control.If(V.Local.bTableExisted, =, False)
+	F.Global.General.GetCompanyCodes(V.Local.sCodes)
+	F.Intrinsic.String.Split(V.Local.sCodes,"*!*", V.Local.sCodes)
+	F.Intrinsic.Control.For(V.Local.iC, 0, V.Local.sCodes.UBound, 1)
+		F.Intrinsic.String.Build("Global_{0}", V.Local.sCodes(V.Local.iC), V.Local.sPDSN)
+		F.ODBC.Connection!conTemp.OpenConnection(V.Local.sPDSN, V.Ambient.PUser, V.Ambient.PPass)
+		F.ODBC.Connection!conTemp.Execute("CREATE TABLE GAB_5587_COMPANIES (CO_CODE CHAR(3))")
+		F.ODBC.Connection!conTemp.Execute("CREATE INDEX GAB_5587_COMPANIES01 USING 0 ON GAB_5587_COMPANIES (CO_CODE)")
+		F.ODBC.Connection!conTemp.Close
+	F.Intrinsic.Control.Next(V.Local.iC)
+F.Intrinsic.Control.EndIf
+
+'Open recordset for company codes
+F.ODBC.Connection!con.OpenRecordSetRO("rstCC", "select CO_CODE from GAB_5587_COMPANIES")
+
+'Loop Through company codes
+F.Intrinsic.Control.DoUntil(V.ODBC.con!rstCC.EOF, =, true)
+	
+	'Open Connection
+	F.ODBC.con!rstCC.Record2String(V.Local.sCode)
+	F.Intrinsic.String.Concat("Global_", V.Local.sCode, V.Local.sPDSN)
+
+	F.ODBC.Connection!conTemp.OpenConnection(V.Local.sPDSN, V.Ambient.PUser, V.Ambient.PPass)
+	
+	'Skip if the part does not exist under this company code
+	F.ODBC.Connection!conTemp.OpenRecordSetRO("rstTemp", "select PART from V_Inventory_MSTR")
+	F.Intrinsic.Control.DoUntil(V.ODBC.conTemp!rstTemp.EOF, =, True)
+		F.Intrinsic.Control.If(V.Local.bRet, <>, True)
+			F.ODBC.conTemp!rstTemp.Record2String(V.Global.sRet)
+			F.Intrinsic.String.IsInString(V.Global.sRet, V.Global.sPartCode, True, V.Local.bRet)
+		F.Intrinsic.Control.EndIf
+		F.ODBC.conTemp!rstTemp.MoveNext
+	F.Intrinsic.Control.Loop
+	
+	F.Intrinsic.Control.If(V.Local.bRet, =, "True")
+		
+
+		
+		'Open recordset to grab part data
+		F.Intrinsic.String.Concat("select LOCATION, QTY_ONHAND, QTY_ONORDER_PO, QTY_ONORDER_WO, QTY_REQUIRED, PRODUCT_LINE, UM_INVENTORY, BIN, DATE_LAST_USAGE from V_Inventory_MSTR where PART = '", V.Global.sPartCode, "'", V.Local.sQuery)
+		F.ODBC.Connection!conTemp.OpenRecordSetRO("rstPD", V.Local.sQuery)
+		
+		'Store data from recordset into variables
+		F.ODBC.conTemp!rstPD.Record2String(V.Global.sRet)
+		
+		F.Intrinsic.String.Split(V.Global.sRet, "*!*", V.Global.sRet)
+		V.Local.sLoc.Set(V.Global.sRet(0))
+		V.Local.fOnHand.Set(V.Global.sRet(1))
+		V.Local.fOnOrderPO.Set(V.Global.sRet(2))
+		V.Local.fOnOrderWO.Set(V.Global.sRet(3))
+		V.Local.fRequired.Set(V.Global.sRet(4))
+		V.Local.sPL.Set(V.Global.sRet(5))
+		V.Local.sUM.Set(V.Global.sRet(6))
+		V.Local.sBIN.Set(V.Global.sRet(7))
+		V.Local.sDLU.Set(V.Global.sRet(8))
+		
+		'Calculate the net and store to fNet
+		F.Intrinsic.Math.Add(V.Local.fOnHand, V.Local.fOnOrderPO, V.Local.fOnOrderWO, V.Local.fNet)
+		F.Intrinsic.Math.Sub(V.Local.fNet, V.Local.fRequired, V.Local.fNet)
+					
+		'Fill in datatable
+		F.Data.DataTable.AddRow("DT", "Company Code", V.Local.sCode, "Loc", V.Local.sLoc, "Quantity On Hand", V.Local.fOnHand, "Quantity On Order PO", V.Local.fOnOrderPO, "Quantity On Order WO", V.Local.fOnOrderWO, "Quantity Required", V.Local.fRequired, "Net", V.Local.fNet, "PL", V.Local.sPL, "Inv UM", V.Local.sUM, "Bin", V.Local.sBIN, "Date Last Used", V.Local.sDLU)
+	
+	F.Intrinsic.Control.EndIf
+	
+
+	
+	F.ODBC.conTemp!rstTemp.Close
+	F.ODBC.Connection!conTemp.Close
+	F.ODBC.con!rstCC.MoveNext
+F.Intrinsic.Control.Loop
+F.ODBC.con!rstCC.Close
+
+'Add gridview to gridcontrol from datatable and adjust
+Gui.Form.GsGridControl1.AddGridviewFromDatatable("GV", "DT")
+Gui.Form.GsGridControl1.MainView("GV")
+Gui.Form.GsGridControl1.SetGridViewProperty("GV", "OptionsDetailShowDetailTabs", True)
+Gui.Form.GsGridControl1.SetGridViewProperty("GV", "ReadOnly", True)
+Gui.Form.GsGridControl1.SetGridviewProperty("GV", "Editable", False)
+Gui.Form.GsGridControl1.SetColumnProperty("GV", "Company Code", "CellFontUnderline", True)
+Gui.Form.GsGridControl1.BestFitColumns("GV")
+
+Gui.Form..Show
+Program.Sub.Main.End
+
+Program.Sub.GsGridControl1_RowCellClick.Start
+'Check to see if click is on the Company Code Column
+F.Intrinsic.Control.If(V.Args.Column, =, "Company Code")
+	Gui.Form.GsGridControl1.SetCellAppearance("GV", 0, V.Args.RowIndex, "BackColor", V.Color.SEC-GSS-00)
+	Gui.Form.GsGridControl1.SetCellAppearance("GV", 0, V.Args.RowIndex, "FontBold", True)
+	'Switch to selected company code
+	F.Global.General.OverrideCompany(V.Args.CellValue)
+	'Call Supply and Demand Window with parameters (Part#, Location)
+	F.Intrinsic.String.Concat(V.Global.sPartCode, "!*! ", V.Global.sRet)
+	F.Global.General.CallWrapperAsync(300010, V.Global.sRet)
+	Gui.Form.GsGridControl1.SetCellAppearance("GV", 0, V.Args.RowIndex, "BackColor", V.Color.White)
+	Gui.Form.GsGridControl1.SetCellAppearance("GV", 0, V.Args.RowIndex, "FontBold", False)
+	Gui.Form.GsGridControl1.SetCellAppearance("GV", 0, V.Args.RowIndex, "FontUnderline", True)
+F.Intrinsic.Control.EndIf
+Program.Sub.GsGridControl1_RowCellClick.End
+
+Program.Sub.Form_UnLoad.Start
+'Connection already closed
+F.Intrinsic.Control.End
+Program.Sub.Form_UnLoad.End
+
+Program.Sub.Comments.Start
+${$0$}$8 - Vincent Tombari$}$Vincent$}$6/7/2019 2:33:01 PM$}$False
+Program.Sub.Comments.End
